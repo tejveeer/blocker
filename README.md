@@ -111,8 +111,14 @@ block with `dig reddit.com @127.0.0.1` (returns `0.0.0.0` when blocked).
   (Cloudflare, Google, Quad9, OpenDNS, AdGuard, Mozilla); an obscure custom DoH
   endpoint could still slip through and can be added to `/etc/blocker/doh.nft`.
 - DNS-based blocking still can't stop traffic that avoids domain resolution
-  entirely (e.g. an app with a hardcoded IP address, or a full VPN tunnel). The
-  app flushes the resolver cache on changes, but browsers may cache briefly.
+  entirely (e.g. an app with a hardcoded IP address, or a full VPN tunnel).
+- **Re-blocking is not instant for already-open pages.** DNS only controls *new*
+  name lookups; it can't close TCP/QUIC connections the browser already has open.
+  After you unblock a site, the browser caches its IP and keeps connections
+  alive, so right after re-blocking an open tab (or a new tab that reuses the
+  live connection) can still load it. The setup caps DNS TTL (`max-ttl=30`) so
+  fresh lookups are blocked within ~30s; for an immediate block, close the
+  site's tabs (or restart the browser).
 - Run the server as your normal user — it calls `sudo` itself; do not run the
   whole app as root.
 

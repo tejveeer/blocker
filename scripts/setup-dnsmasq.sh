@@ -30,6 +30,10 @@ no-resolv
 server=1.1.1.1
 server=8.8.8.8
 cache-size=1000
+# Cap the TTL handed to clients so a site's real IP isn't cached for long after
+# you unblock it -- this makes re-blocking take effect within ~30s instead of
+# waiting out the upstream TTL (often several minutes).
+max-ttl=30
 # Make Firefox disable its automatic DNS-over-HTTPS: returning NXDOMAIN for the
 # canary domain is Mozilla's documented opt-out for network operators.
 local=/use-application-dns.net/
