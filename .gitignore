@@ -1,0 +1,8 @@
+node_modules/
+dist/
+build/
+
+# Local data: contains the stored sudo password and site state
+server/data/
+*.tmp
+.DS_Store
