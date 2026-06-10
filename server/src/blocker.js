@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { loadConfig, saveConfig } from "./store.js";
-import { applyBlockedDomains, normalizeDomain } from "./hosts.js";
+import { applyBlockedDomains, normalizeDomain } from "./dns.js";
 
 /** Local date key like "2026-06-09" used to detect day rollover. */
 function todayKey(d = new Date()) {
@@ -90,13 +90,9 @@ export class BlockerService {
   async sync({ force = false } = {}) {
     const changed = reconcileTime(this.config.sites);
     if (changed || force) {
-      // Apply to /etc/hosts first; only persist once the write succeeds so a
+      // Apply the DNS rules first; only persist once the write succeeds so a
       // failed write never leaves config.json out of sync with the system.
-      await applyBlockedDomains(
-        blockedDomains(this.config.sites),
-        this.config.sites.map((s) => s.domain),
-        this.config.sudoPassword
-      );
+      await applyBlockedDomains(blockedDomains(this.config.sites), this.config.sudoPassword);
       this.persist();
     }
     return this.listSites();

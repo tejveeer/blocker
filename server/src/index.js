@@ -1,7 +1,7 @@
 import express from "express";
 import cors from "cors";
 import { BlockerService } from "./blocker.js";
-import { verifySudoPassword } from "./hosts.js";
+import { verifySudoPassword } from "./sudo.js";
 
 const PORT = process.env.PORT || 4000;
 const service = new BlockerService();
@@ -75,7 +75,7 @@ app.post(
     if (!password) throw new Error("Password is required.");
     await verifySudoPassword(password);
     service.setSudoPassword(password);
-    // Re-apply current rules now that we can write to /etc/hosts.
+    // Re-apply current rules now that we can run sudo.
     await service.sync({ force: true });
     res.json({ ok: true });
   })
@@ -85,11 +85,11 @@ app.use((req, res) => res.status(404).json({ error: "Not found" }));
 
 app.listen(PORT, async () => {
   console.log(`Blocker server listening on http://localhost:${PORT}`);
-  // Reconcile + push to /etc/hosts on boot if a password is stored.
+  // Reconcile + push DNS rules on boot if a password is stored.
   if (service.hasPassword()) {
     try {
       await service.sync({ force: true });
-      console.log("Applied blocking rules to /etc/hosts on startup.");
+      console.log("Applied blocking rules to dnsmasq on startup.");
     } catch (err) {
       console.error("Could not apply rules on startup:", err.message);
     }
@@ -99,7 +99,7 @@ app.listen(PORT, async () => {
 });
 
 // Background scheduler: every 15s reconcile time (expiries, midnight reset)
-// and push changes to /etc/hosts.
+// and push changes to dnsmasq.
 setInterval(() => {
   if (!service.hasPassword()) return;
   service.sync().catch((err) => console.error("Scheduler sync failed:", err.message));
