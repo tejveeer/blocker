@@ -33,43 +33,46 @@ export default function App() {
 
   if (loading) {
     return (
-      <div className="app">
-        <p className="muted center">Loading…</p>
+      <div className="mx-auto max-w-3xl px-5 py-8">
+        <p className="text-center text-muted">Loading…</p>
       </div>
     );
   }
 
   return (
-    <div className="app">
-      <header className="header">
-        <div>
-          <h1>Website Blocker</h1>
-          <p className="muted">Block distractions on Ubuntu via <code>/etc/hosts</code>.</p>
-        </div>
+    <div className="mx-auto max-w-3xl px-5 pb-16 pt-8">
+      <header>
+        <h1 className="text-3xl font-semibold tracking-tight">Website Blocker</h1>
+        <p className="mt-1 text-muted">
+          Block distractions on Ubuntu via <code className="rounded bg-surface2 px-1.5 py-0.5 text-[0.85em]">/etc/hosts</code>.
+        </p>
       </header>
 
       {error && (
-        <div className="banner error" role="alert">
+        <div
+          role="alert"
+          className="mt-5 flex items-center justify-between gap-3 rounded-xl border border-danger/40 bg-danger/10 px-4 py-3 text-[#ffb4b4]"
+        >
           <span>{error}</span>
-          <button className="icon-btn" onClick={() => setError("")} aria-label="dismiss">
+          <button
+            onClick={() => setError("")}
+            aria-label="dismiss"
+            className="cursor-pointer text-xl leading-none"
+          >
             ×
           </button>
         </div>
       )}
 
-      <PasswordGate
-        hasPassword={hasPassword}
-        onSaved={refresh}
-        onError={handleError}
-      />
+      <PasswordGate hasPassword={hasPassword} onSaved={refresh} onError={handleError} />
 
       {hasPassword && (
         <>
           <AddSiteForm onAdded={refresh} onError={handleError} />
 
-          <section className="sites">
+          <section className="mt-5 flex flex-col gap-3">
             {sites.length === 0 ? (
-              <p className="muted center empty">
+              <p className="mt-7 text-center text-muted">
                 No sites yet. Add one above to start blocking.
               </p>
             ) : (
@@ -86,8 +89,8 @@ export default function App() {
         </>
       )}
 
-      <footer className="footer muted">
-        <span>{sites.length} site{sites.length === 1 ? "" : "s"} managed</span>
+      <footer className="mt-7 text-center text-sm text-muted">
+        {sites.length} site{sites.length === 1 ? "" : "s"} managed
       </footer>
     </div>
   );

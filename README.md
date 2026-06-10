@@ -6,8 +6,8 @@ unblocking them.
 
 ## Features
 
-- **Add a site to block** — blocks the whole domain (bare, `www.`, and `m.`
-  subdomains) by pointing it at `0.0.0.0`.
+- **Add a site to block** — blocks the whole domain (bare plus `www.`, `m.`,
+  `mobile.`, `old.`, `new.`, `np.` subdomains) by pointing it at `0.0.0.0`.
 - **Unblock** — temporarily unblocks a site for a configured duration.
 - **Daily allowance** — set how many times a site can be unblocked per day and
   for how long each time. Once you run out, the site stays blocked until the
@@ -27,9 +27,15 @@ The server keeps a managed block inside `/etc/hosts` delimited by markers:
 # === BLOCKER MANAGED END ===
 ```
 
-Everything outside those markers (your existing hosts entries) is left
-untouched. A background scheduler re-blocks sites when their temporary unblock
-expires and resets daily counters at midnight.
+Everything outside those markers is left untouched, **except** pre-existing
+entries (commented or not) that target a domain the app manages — those are
+removed so the managed block is the single source of truth (otherwise a leftover
+manual `127.0.0.1 reddit.com` line would keep a site blocked even after you
+unblock it). The original `/etc/hosts` is backed up once to
+`server/data/hosts.backup` before the first modification.
+
+A background scheduler re-blocks sites when their temporary unblock expires and
+resets daily counters at midnight.
 
 ## Setup
 
@@ -68,5 +74,5 @@ locally under `server/data/config.json`), then start adding sites.
 
 ```
 server/   Express API + /etc/hosts manager + scheduler
-client/   Vite + React UI
+client/   Vite + React UI (styled with Tailwind CSS v4)
 ```

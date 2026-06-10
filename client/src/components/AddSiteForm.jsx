@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { api } from "../api.js";
+import { btn, card, fieldLabel, input } from "../ui.js";
 
 const DEFAULTS = { domain: "", dailyUnblockLimit: 3, durationValue: 30, durationUnit: "minutes" };
 
@@ -32,10 +33,10 @@ export default function AddSiteForm({ onAdded, onError }) {
   };
 
   return (
-    <section className="card">
-      <h2>Block a website</h2>
-      <form className="add-form" onSubmit={submit}>
-        <label className="field grow">
+    <section className={`mt-5 ${card}`}>
+      <h2 className="mb-3 text-lg font-semibold">Block a website</h2>
+      <form className="flex flex-wrap items-end gap-3.5" onSubmit={submit}>
+        <label className={`${fieldLabel} flex-1 basis-52`}>
           <span>Domain</span>
           <input
             type="text"
@@ -43,10 +44,11 @@ export default function AddSiteForm({ onAdded, onError }) {
             value={form.domain}
             onChange={update("domain")}
             required
+            className={input}
           />
         </label>
 
-        <label className="field">
+        <label className={fieldLabel}>
           <span>Unblocks / day</span>
           <input
             type="number"
@@ -54,26 +56,28 @@ export default function AddSiteForm({ onAdded, onError }) {
             max="100"
             value={form.dailyUnblockLimit}
             onChange={update("dailyUnblockLimit")}
+            className={`${input} w-28`}
           />
         </label>
 
-        <label className="field">
+        <label className={fieldLabel}>
           <span>Each unblock lasts</span>
-          <div className="duration">
+          <div className="flex gap-1.5">
             <input
               type="number"
               min="1"
               value={form.durationValue}
               onChange={update("durationValue")}
+              className={`${input} w-20`}
             />
-            <select value={form.durationUnit} onChange={update("durationUnit")}>
+            <select value={form.durationUnit} onChange={update("durationUnit")} className={input}>
               <option value="minutes">minutes</option>
               <option value="hours">hours</option>
             </select>
           </div>
         </label>
 
-        <button className="btn primary" type="submit" disabled={saving}>
+        <button className={btn.primary} type="submit" disabled={saving}>
           {saving ? "Adding…" : "Add"}
         </button>
       </form>

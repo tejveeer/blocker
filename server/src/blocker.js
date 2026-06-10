@@ -92,7 +92,11 @@ export class BlockerService {
     if (changed || force) {
       // Apply to /etc/hosts first; only persist once the write succeeds so a
       // failed write never leaves config.json out of sync with the system.
-      await applyBlockedDomains(blockedDomains(this.config.sites), this.config.sudoPassword);
+      await applyBlockedDomains(
+        blockedDomains(this.config.sites),
+        this.config.sites.map((s) => s.domain),
+        this.config.sudoPassword
+      );
       this.persist();
     }
     return this.listSites();

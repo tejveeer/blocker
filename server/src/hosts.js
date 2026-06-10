@@ -10,7 +10,7 @@ const REDIRECT_IP = "0.0.0.0";
 
 // Subdomain prefixes we add for every blocked domain so the "whole domain" is
 // covered as much as /etc/hosts allows (it has no wildcard support).
-const SUBDOMAIN_PREFIXES = ["", "www.", "m."];
+const SUBDOMAIN_PREFIXES = ["", "www.", "m.", "mobile.", "old.", "new.", "np."];
 
 /**
  * Normalize user input into a bare registrable-ish domain.
@@ -54,6 +54,29 @@ function stripManagedBlock(text) {
   return combined + "\n";
 }
 
+/** True if a hostname equals or is a subdomain of any managed bare domain. */
+function hostMatchesManaged(host, managedBare) {
+  const h = String(host).toLowerCase().split("/")[0];
+  return managedBare.some((d) => h === d || h.endsWith("." + d));
+}
+
+/**
+ * Remove pre-existing host entries (commented or not) that target a managed
+ * domain, so the blocker's managed block is the single source of truth. Without
+ * this, leftover manual lines like "127.0.0.1 reddit.com" would keep a site
+ * blocked even after the app "unblocks" it.
+ */
+function cleanBase(baseText, managedBare) {
+  if (managedBare.length === 0) return baseText;
+  const hostLine = /^\s*#?\s*\d{1,3}(?:\.\d{1,3}){3}\s+(\S+)/;
+  const kept = baseText.split("\n").filter((line) => {
+    const m = line.match(hostLine);
+    if (!m) return true;
+    return !hostMatchesManaged(m[1], managedBare);
+  });
+  return kept.join("\n").replace(/\s+$/, "") + "\n";
+}
+
 /** Build the managed block text for the given list of blocked domains. */
 function buildManagedBlock(domains) {
   const lines = [MARK_START];
@@ -91,16 +114,31 @@ function runSudo(args, password) {
 }
 
 /**
- * Write the desired set of blocked domains into /etc/hosts, preserving every
- * line outside our managed block.
+ * Write /etc/hosts so that:
+ *  - everything outside our managed block is preserved, except
+ *  - pre-existing entries for managed domains are stripped (we own them now)
+ *  - the managed block contains every currently-blocked domain.
+ *
+ * @param {string[]} blockedDomains  domains that should be blocked right now
+ * @param {string[]} managedDomains  every domain the app manages (blocked or not)
+ * @param {string}   sudoPassword
  */
-export async function applyBlockedDomains(domains, sudoPassword) {
+export async function applyBlockedDomains(blockedDomains, managedDomains, sudoPassword) {
   if (!sudoPassword) {
     throw new Error("Sudo password is not set. Set it in Settings first.");
   }
+  const managedBare = [...new Set(managedDomains.map(normalizeDomain).filter(Boolean))];
+
   const current = readHosts();
-  const base = stripManagedBlock(current);
-  const managed = buildManagedBlock(domains);
+
+  // Keep a one-time backup of the original /etc/hosts before we ever modify it.
+  const backupPath = path.join(DATA_DIR, "hosts.backup");
+  if (!fs.existsSync(backupPath)) {
+    fs.writeFileSync(backupPath, current, { mode: 0o600 });
+  }
+
+  const base = cleanBase(stripManagedBlock(current), managedBare);
+  const managed = buildManagedBlock(blockedDomains);
   const next = base.replace(/\s+$/, "") + "\n\n" + managed;
 
   const tmpPath = path.join(DATA_DIR, "hosts.new");

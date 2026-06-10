@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { api } from "../api.js";
+import { btn, card, fieldLabel, input } from "../ui.js";
 
 function useCountdown(expiresAt) {
   const [remaining, setRemaining] = useState(() => calc(expiresAt));
@@ -34,6 +35,12 @@ function formatDuration(minutes) {
   return `${minutes} min`;
 }
 
+const STATUS = {
+  blocked: { label: "Blocked", dot: "bg-danger", pill: "bg-danger/15 text-[#ff9b9b]" },
+  unblocked: { label: "Unblocked", dot: "bg-green", pill: "bg-green/15 text-green" },
+  locked: { label: "Locked until tomorrow", dot: "bg-muted", pill: "bg-muted/15 text-muted" },
+};
+
 export default function SiteCard({ site, onChanged, onError }) {
   const [busy, setBusy] = useState(false);
   const [editing, setEditing] = useState(false);
@@ -65,46 +72,44 @@ export default function SiteCard({ site, onChanged, onError }) {
     );
   }
 
-  const statusLabel = {
-    blocked: "Blocked",
-    unblocked: "Unblocked",
-    locked: "Locked until tomorrow",
-  }[site.status];
+  const status = STATUS[site.status];
 
   return (
-    <article className={`card site status-${site.status}`}>
-      <div className="site-main">
-        <div className="site-head">
-          <span className={`dot ${site.status}`} />
-          <h3>{site.domain}</h3>
-          <span className={`pill ${site.status}`}>{statusLabel}</span>
+    <article className={`${card} flex flex-wrap items-center justify-between gap-4`}>
+      <div>
+        <div className="flex items-center gap-2.5">
+          <span className={`h-2.5 w-2.5 rounded-full ${status.dot}`} />
+          <h3 className="text-lg font-semibold">{site.domain}</h3>
+          <span
+            className={`rounded-full px-2.5 py-0.5 text-[0.7rem] font-bold uppercase tracking-wide ${status.pill}`}
+          >
+            {status.label}
+          </span>
         </div>
 
-        <div className="site-meta muted">
-          <span>{site.unblocksRemaining} of {site.dailyUnblockLimit} unblocks left today</span>
+        <div className="mt-2 flex flex-wrap gap-2 text-sm text-muted">
+          <span>
+            {site.unblocksRemaining} of {site.dailyUnblockLimit} unblocks left today
+          </span>
           <span>·</span>
           <span>{formatDuration(site.unblockDurationMinutes)} each</span>
           {site.status === "unblocked" && (
             <>
               <span>·</span>
-              <span className="countdown">re-blocks in {formatMs(remaining)}</span>
+              <span className="tabular-nums text-warn">re-blocks in {formatMs(remaining)}</span>
             </>
           )}
         </div>
       </div>
 
-      <div className="site-actions">
+      <div className="flex flex-wrap gap-2">
         {site.status === "unblocked" ? (
-          <button
-            className="btn warn"
-            disabled={busy}
-            onClick={() => run(() => api.reblock(site.id))}
-          >
+          <button className={btn.warn} disabled={busy} onClick={() => run(() => api.reblock(site.id))}>
             Block now
           </button>
         ) : (
           <button
-            className="btn primary"
+            className={btn.primary}
             disabled={busy || site.status === "locked"}
             onClick={() => run(() => api.unblock(site.id))}
             title={site.status === "locked" ? "No unblocks left today" : ""}
@@ -112,11 +117,11 @@ export default function SiteCard({ site, onChanged, onError }) {
             Unblock
           </button>
         )}
-        <button className="btn ghost" disabled={busy} onClick={() => setEditing(true)}>
+        <button className={btn.ghost} disabled={busy} onClick={() => setEditing(true)}>
           Edit
         </button>
         <button
-          className="btn danger ghost"
+          className={btn.danger}
           disabled={busy}
           onClick={() => {
             if (confirm(`Remove ${site.domain} from the blocker?`)) {
@@ -161,13 +166,13 @@ function EditSiteForm({ site, onCancel, onSaved, onError }) {
   };
 
   return (
-    <article className="card site editing">
-      <form className="add-form" onSubmit={save}>
-        <label className="field grow">
+    <article className={card}>
+      <form className="flex flex-wrap items-end gap-3.5" onSubmit={save}>
+        <label className={`${fieldLabel} flex-1 basis-52`}>
           <span>Domain</span>
-          <input value={domain} onChange={(e) => setDomain(e.target.value)} required />
+          <input value={domain} onChange={(e) => setDomain(e.target.value)} required className={input} />
         </label>
-        <label className="field">
+        <label className={fieldLabel}>
           <span>Unblocks / day</span>
           <input
             type="number"
@@ -175,28 +180,34 @@ function EditSiteForm({ site, onCancel, onSaved, onError }) {
             max="100"
             value={limit}
             onChange={(e) => setLimit(e.target.value)}
+            className={`${input} w-28`}
           />
         </label>
-        <label className="field">
+        <label className={fieldLabel}>
           <span>Each unblock lasts</span>
-          <div className="duration">
+          <div className="flex gap-1.5">
             <input
               type="number"
               min="1"
               value={durationValue}
               onChange={(e) => setDurationValue(e.target.value)}
+              className={`${input} w-20`}
             />
-            <select value={durationUnit} onChange={(e) => setDurationUnit(e.target.value)}>
+            <select
+              value={durationUnit}
+              onChange={(e) => setDurationUnit(e.target.value)}
+              className={input}
+            >
               <option value="minutes">minutes</option>
               <option value="hours">hours</option>
             </select>
           </div>
         </label>
-        <div className="edit-actions">
-          <button className="btn primary" type="submit" disabled={saving}>
+        <div className="flex gap-2">
+          <button className={btn.primary} type="submit" disabled={saving}>
             {saving ? "Saving…" : "Save"}
           </button>
-          <button type="button" className="btn ghost" onClick={onCancel}>
+          <button type="button" className={btn.ghost} onClick={onCancel}>
             Cancel
           </button>
         </div>
