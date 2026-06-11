@@ -196,6 +196,10 @@ function EditSiteForm({ site, onCancel, onSaved, onError }) {
   const [durationUnit, setDurationUnit] = useState(isHours ? "hours" : "minutes");
   const [saving, setSaving] = useState(false);
 
+  // Once today's unblocks are all used up, the daily limit is locked until the
+  // counter resets tomorrow (no editing your way around being out of unblocks).
+  const unblocksDepleted = site.unblocksRemaining === 0;
+
   const save = async (e) => {
     e.preventDefault();
     setSaving(true);
@@ -229,8 +233,13 @@ function EditSiteForm({ site, onCancel, onSaved, onError }) {
           max="100"
           value={limit}
           onChange={(e) => setLimit(e.target.value)}
+          disabled={unblocksDepleted}
+          title={unblocksDepleted ? "No unblocks left today — locked until tomorrow" : ""}
           className="w-28"
         />
+        {unblocksDepleted && (
+          <span className="text-xs text-muted-foreground">Locked until tomorrow</span>
+        )}
       </div>
       <div className="flex flex-col gap-1.5">
         <Label className="text-xs text-muted-foreground">Each unblock lasts</Label>

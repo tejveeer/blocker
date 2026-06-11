@@ -4,17 +4,17 @@ import { Monitor, Moon, Sun } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useTheme } from "@/components/theme-provider";
 
-const ORDER = ["system", "light", "dark"];
-const ICONS = { system: Monitor, light: Sun, dark: Moon };
-const LABELS = { system: "System theme", light: "Light theme", dark: "Dark theme" };
+const ICONS = { light: Sun, dark: Moon };
+const LABELS = { light: "Light theme", dark: "Dark theme" };
 
 export default function ThemeToggle() {
-  const { theme, setTheme } = useTheme();
-  const Icon = ICONS[theme] ?? Monitor;
+  const { resolvedTheme, setTheme } = useTheme();
+  const Icon = ICONS[resolvedTheme] ?? Monitor;
 
+  // Toggle based on what's actually showing so the screen always flips on the
+  // first click, regardless of the OS preference behind "system".
   const cycle = () => {
-    const next = ORDER[(ORDER.indexOf(theme) + 1) % ORDER.length];
-    setTheme(next);
+    setTheme(resolvedTheme === "dark" ? "light" : "dark");
   };
 
   return (
@@ -22,13 +22,13 @@ export default function ThemeToggle() {
       variant="outline"
       size="icon"
       onClick={cycle}
-      aria-label={`Switch theme (currently ${LABELS[theme]})`}
-      title={LABELS[theme]}
+      aria-label={`Switch theme (currently ${LABELS[resolvedTheme]})`}
+      title={LABELS[resolvedTheme]}
       className="relative overflow-hidden"
     >
       <AnimatePresence mode="wait" initial={false}>
         <motion.span
-          key={theme}
+          key={resolvedTheme}
           initial={{ y: -16, opacity: 0, rotate: -90 }}
           animate={{ y: 0, opacity: 1, rotate: 0 }}
           exit={{ y: 16, opacity: 0, rotate: 90 }}
