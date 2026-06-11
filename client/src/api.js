@@ -26,4 +26,5 @@ export const api = {
       method: "POST",
       body: JSON.stringify(payload),
     }),
+  // payload: { mode: "temporary" | "permanent", increment: number, reason?: string }
 };

@@ -62,7 +62,11 @@ export default function SiteCard({ site, onChanged, onError }) {
     }
   };
 
-  const status = STATUS[site.status];
+  // A 0/0 site has no unblock allowance at all — it's simply blocked, so don't
+  // present it as "locked until tomorrow".
+  const effectiveStatus =
+    site.status === "locked" && site.dailyUnblockLimit === 0 ? "blocked" : site.status;
+  const status = STATUS[effectiveStatus];
 
   return (
     <Card className="overflow-hidden">

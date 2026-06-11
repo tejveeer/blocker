@@ -122,7 +122,7 @@ export default function App() {
                 key={item.id}
                 onClick={() => setPage(item.id)}
                 className={cn(
-                  "rounded-md px-3.5 py-1.5 text-sm font-medium transition-colors",
+                  "cursor-pointer rounded-md px-3.5 py-1.5 text-sm font-medium transition-colors",
                   page === item.id
                     ? "bg-background text-foreground shadow-sm"
                     : "text-muted-foreground hover:text-foreground"
@@ -157,11 +157,16 @@ export default function App() {
                       No sites yet. Add one above to start blocking.
                     </motion.p>
                   ) : (
-                    sites.map((site) => (
-                      <motion.div key={site.id} variants={listItem} layout exit="exit">
-                        <SiteCard site={site} onChanged={refresh} onError={handleError} />
-                      </motion.div>
-                    ))
+                    [...sites]
+                      .sort(
+                        (a, b) =>
+                          (b.unblocksRemaining > 0 ? 1 : 0) - (a.unblocksRemaining > 0 ? 1 : 0)
+                      )
+                      .map((site) => (
+                        <motion.div key={site.id} variants={listItem} layout exit="exit">
+                          <SiteCard site={site} onChanged={refresh} onError={handleError} />
+                        </motion.div>
+                      ))
                   )}
                 </AnimatePresence>
               </motion.section>

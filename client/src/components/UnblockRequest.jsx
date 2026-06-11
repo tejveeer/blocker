@@ -3,6 +3,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import { CheckCircle2, Loader2, Scale, XCircle } from "lucide-react";
 
 import { api } from "../api.js";
+import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -17,29 +18,69 @@ import {
 } from "@/components/ui/select";
 import { fadeInUp, springSoft } from "@/lib/motion";
 
+function SegmentedControl({ options, value, onChange }) {
+  return (
+    <div className="inline-flex w-fit gap-1 self-start rounded-lg border bg-muted/40 p-1">
+      {options.map((opt) => (
+        <button
+          key={opt.value}
+          type="button"
+          onClick={() => onChange(opt.value)}
+          className={cn(
+            "cursor-pointer rounded-md px-3 py-1.5 text-sm font-medium transition-colors",
+            value === opt.value
+              ? "bg-background text-foreground shadow-sm"
+              : "text-muted-foreground hover:text-foreground"
+          )}
+        >
+          {opt.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
 export default function UnblockRequest({ sites, onChanged, onError }) {
   const [siteId, setSiteId] = useState(sites[0]?.id ?? "");
-  const [requestedTotal, setRequestedTotal] = useState("");
+  const [mode, setMode] = useState("temporary");
+  const [amount, setAmount] = useState("");
   const [reason, setReason] = useState("");
   const [submitting, setSubmitting] = useState(false);
-  const [verdict, setVerdict] = useState(null);
+  // Verdicts are keyed by site id so the result card is tied to its site:
+  // switching sites shows that site's last verdict (or nothing).
+  const [verdicts, setVerdicts] = useState({});
+  const verdict = verdicts[siteId] ?? null;
 
-  const selected = useMemo(
-    () => sites.find((s) => s.id === siteId) ?? null,
-    [sites, siteId]
-  );
-  const current = selected?.unblocksRemaining ?? 0;
+  const selected = useMemo(() => sites.find((s) => s.id === siteId) ?? null, [sites, siteId]);
+
+  const isPermanent = mode === "permanent";
+  const currentLimit = selected?.dailyUnblockLimit ?? 0;
+  const hasAmount = amount !== "" && !Number.isNaN(Number(amount));
+
+  // Temporary mode asks for "how many more"; permanent mode asks for the new
+  // total daily limit, from which we derive the increment (negative = decrease).
+  const increment = isPermanent
+    ? (hasAmount ? Number(amount) : currentLimit) - currentLimit
+    : Math.abs(Number(amount) || 0);
+  const isDecrease = isPermanent && hasAmount && increment < 0;
+  const reasonRequired = !isDecrease;
+
+  const amountLabel = isPermanent
+    ? "New daily limit"
+    : "How many more unblocks do you want today?";
 
   const submit = async (e) => {
     e.preventDefault();
+    const requestSiteId = siteId;
     setSubmitting(true);
-    setVerdict(null);
+    setVerdicts((prev) => ({ ...prev, [requestSiteId]: null }));
     try {
-      const result = await api.requestUnblocks(siteId, {
-        requestedTotal: Number(requestedTotal),
-        reason,
+      const result = await api.requestUnblocks(requestSiteId, {
+        mode,
+        increment,
+        reason: reasonRequired ? reason : "",
       });
-      setVerdict(result);
+      setVerdicts((prev) => ({ ...prev, [requestSiteId]: result }));
       onChanged();
     } catch (err) {
       onError(err);
@@ -63,11 +104,11 @@ export default function UnblockRequest({ sites, onChanged, onError }) {
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-lg">
               <Scale className="size-5 text-primary" />
-              Request extra unblocks
+              Request a change
             </CardTitle>
             <CardDescription>
-              Your request is reviewed by a teacher who weighs it against your practice. Necessity
-              may be granted; entertainment will not. Be honest.
+              The teacher grants access only for genuine necessity — never for desire. Reducing
+              your own limits is always permitted instantly.
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -88,45 +129,71 @@ export default function UnblockRequest({ sites, onChanged, onError }) {
                 </Select>
               </div>
 
-              <div className="flex flex-wrap gap-4">
-                <div className="flex flex-col gap-1.5">
-                  <Label className="text-xs text-muted-foreground">Unblocks you have today</Label>
-                  <div className="flex h-9 w-40 items-center rounded-md border border-input bg-muted/40 px-3 text-sm tabular-nums text-muted-foreground">
-                    {current} of {selected?.dailyUnblockLimit ?? 0} left
+              <div className="flex flex-col gap-1.5">
+                <Label className="text-xs text-muted-foreground">Mode</Label>
+                <SegmentedControl
+                  value={mode}
+                  onChange={setMode}
+                  options={[
+                    { value: "temporary", label: "Temporary (today)" },
+                    { value: "permanent", label: "Permanent (daily limit)" },
+                  ]}
+                />
+              </div>
+
+              <div className="flex flex-wrap items-end gap-4">
+                {selected && (
+                  <div className="flex flex-col gap-1.5">
+                    <Label className="text-xs text-muted-foreground">
+                      {isPermanent ? "Current daily limit" : "Available today"}
+                    </Label>
+                    <div className="flex h-9 w-40 items-center rounded-md border border-input bg-muted/40 px-3 text-sm tabular-nums text-muted-foreground">
+                      {isPermanent
+                        ? `${selected.dailyUnblockLimit} / day`
+                        : `${selected.unblocksRemaining} of ${selected.dailyUnblockLimit} left`}
+                    </div>
                   </div>
-                </div>
+                )}
                 <div className="flex flex-col gap-1.5">
-                  <Label className="text-xs text-muted-foreground">Total you want today</Label>
+                  <Label className="text-xs text-muted-foreground">{amountLabel}</Label>
                   <Input
                     type="number"
-                    min={current + 1}
+                    min={isPermanent ? "0" : "1"}
                     max="100"
-                    placeholder={`> ${current}`}
-                    value={requestedTotal}
-                    onChange={(e) => setRequestedTotal(e.target.value)}
+                    placeholder={isPermanent ? String(currentLimit) : "0"}
+                    value={amount}
+                    onChange={(e) => setAmount(e.target.value)}
                     className="w-40"
                     required
                   />
                 </div>
               </div>
 
-              <div className="flex flex-col gap-1.5">
-                <Label className="text-xs text-muted-foreground">Why do you need them?</Label>
-                <Textarea
-                  placeholder="Explain the necessity. Vague or entertainment-driven reasons will be denied."
-                  value={reason}
-                  onChange={(e) => setReason(e.target.value)}
-                  required
-                />
-              </div>
+              {reasonRequired ? (
+                <div className="flex flex-col gap-1.5">
+                  <Label className="text-xs text-muted-foreground">Reason</Label>
+                  <Textarea
+                    placeholder="What concrete, external obligation requires this? Desire, convenience, and entertainment will be refused."
+                    value={reason}
+                    onChange={(e) => setReason(e.target.value)}
+                    required
+                  />
+                </div>
+              ) : (
+                <p className="text-sm text-muted-foreground">
+                  Reducing your daily limit needs no justification and is applied immediately.
+                </p>
+              )}
 
               <div>
                 <Button type="submit" disabled={submitting}>
                   {submitting ? (
                     <>
                       <Loader2 className="size-4 animate-spin" />
-                      Asking the teacher…
+                      {isDecrease ? "Applying…" : "Asking the teacher…"}
                     </>
+                  ) : isDecrease ? (
+                    "Reduce limit"
                   ) : (
                     "Submit request"
                   )}
@@ -140,7 +207,7 @@ export default function UnblockRequest({ sites, onChanged, onError }) {
       <AnimatePresence mode="wait">
         {verdict && (
           <motion.div
-            key={verdict.validated ? "granted" : "denied"}
+            key={`${siteId}-${verdict.validated ? "granted" : "denied"}`}
             initial={{ opacity: 0, y: 8 }}
             animate={{ opacity: 1, y: 0, transition: springSoft }}
             exit={{ opacity: 0, y: -8 }}
@@ -159,13 +226,7 @@ export default function UnblockRequest({ sites, onChanged, onError }) {
                   <XCircle className="mt-0.5 size-5 shrink-0 text-destructive" />
                 )}
                 <div className="flex flex-col gap-1">
-                  <p className="font-semibold">
-                    {verdict.validated
-                      ? `Granted — ${verdict.increment} extra unblock${
-                          verdict.increment === 1 ? "" : "s"
-                        } added for today`
-                      : "Request denied"}
-                  </p>
+                  <p className="font-semibold">{verdictTitle(verdict)}</p>
                   <p className="text-sm text-muted-foreground">{verdict.reason}</p>
                 </div>
               </CardContent>
@@ -175,4 +236,13 @@ export default function UnblockRequest({ sites, onChanged, onError }) {
       </AnimatePresence>
     </div>
   );
+}
+
+function verdictTitle(verdict) {
+  if (!verdict.validated) return "Request denied";
+  const n = Math.abs(verdict.increment);
+  const unit = `unblock${n === 1 ? "" : "s"}`;
+  if (verdict.increment < 0) return `Daily limit reduced by ${n} ${unit}`;
+  if (verdict.mode === "permanent") return `Granted — daily limit raised by ${n} ${unit}`;
+  return `Granted — ${n} extra ${unit} added for today`;
 }

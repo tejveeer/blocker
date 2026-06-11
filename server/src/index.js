@@ -85,33 +85,54 @@ app.post(
 app.post(
   "/api/sites/:id/unblock-request",
   wrap(async (req, res) => {
-    const { requestedTotal, reason } = req.body || {};
+    const { mode, increment, reason } = req.body || {};
     const site = service.getSiteView(req.params.id);
 
-    const requested = Number.parseInt(requestedTotal, 10);
-    if (Number.isNaN(requested) || requested <= site.unblocksRemaining) {
-      throw new Error(
-        "Ask for more unblocks than you currently have available, or there is nothing to grant."
-      );
+    const scope = mode === "permanent" ? "permanent" : "temporary";
+    const delta = Number.parseInt(increment, 10);
+    if (Number.isNaN(delta) || delta === 0) {
+      throw new Error("Choose how many unblocks to add or remove.");
+    }
+
+    // Permanent decreases (more restriction) are always allowed instantly, with
+    // no teacher review — choosing restraint never needs justification.
+    if (scope === "permanent" && delta < 0) {
+      const updated = await service.changeDailyLimit(site.id, delta);
+      res.json({
+        validated: true,
+        autoApproved: true,
+        increment: delta,
+        reason: "Restraint is always permitted. Your daily limit has been reduced.",
+        site: updated,
+      });
+      return;
+    }
+
+    if (delta < 0) {
+      throw new Error("Temporary requests can only add unblocks. Use permanent mode to reduce your limit.");
     }
     if (!reason || !reason.trim()) {
-      throw new Error("Please explain why you need the extra unblocks.");
+      throw new Error("Please state the necessity for this request.");
     }
 
     const verdict = await evaluateUnblockRequest({
       domain: site.domain,
       currentRemaining: site.unblocksRemaining,
       dailyLimit: site.dailyUnblockLimit,
-      requestedTotal: requested,
+      requestedIncrement: delta,
+      mode: scope,
       reason: reason.trim(),
     });
 
     let updated = site;
     if (verdict.validated && verdict.increment > 0) {
-      updated = await service.grantExtraUnblocks(site.id, verdict.increment);
+      updated =
+        scope === "permanent"
+          ? await service.changeDailyLimit(site.id, verdict.increment)
+          : await service.grantExtraUnblocks(site.id, verdict.increment);
     }
 
-    res.json({ ...verdict, site: updated });
+    res.json({ ...verdict, autoApproved: false, mode: scope, site: updated });
   })
 );
 

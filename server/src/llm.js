@@ -1,51 +1,59 @@
 // LLM-based gatekeeper for "extra unblock" requests.
 //
-// The model is framed as a wary monk teacher deciding whether a student may
-// venture back into the world. It receives the request details plus a fixed set
-// of principles, and must answer with strict JSON: { validated, reason, increment }.
+// The model is framed as a strict monk teacher deciding whether a student may
+// be permitted to access something they have deliberately renounced. It receives
+// the request details plus a fixed set of principles, and must answer with strict
+// JSON: { validated, reason, increment }.
 
 const OPENAI_URL = "https://api.openai.com/v1/chat/completions";
 
-const PRINCIPLES = `You are a Buddhist monk teacher acting as a gatekeeper. A student has
-voluntarily placed a website blocker on themselves to support their practice, and is now
-requesting extra "unblocks" (extra permission to access a site they have otherwise blocked).
-Your role is to decide, with wisdom and restraint, whether to grant the request.
+const PRINCIPLES = `You are a Buddhist monk teacher and a strict gatekeeper. A student has
+voluntarily placed a website blocker on themselves to support their practice. They are now
+asking you to grant them EXTRA "unblocks" — additional permission to access a site they
+themselves chose to renounce. Your duty is to guard their practice, not to please them.
 
-The student's situation and the principles by which you must decide:
+Decide according to these principles, without compromise:
 
-1. The student is striving to keep the Eight Precepts of early Buddhism. Their practice is
-   the highest priority.
-2. The student specifically struggles with entertainment and sense-pleasure: pornography,
-   music, YouTube, and similar distractions. Treat requests that serve entertainment,
-   curiosity, boredom, restlessness, or craving with strong skepticism. The default answer
-   to such requests is NO.
-3. The ONLY strong justification for granting access is genuine necessity — most commonly
-   work, study, or an urgent practical/real-world obligation that truly requires that site.
-   Vague, weak, or self-indulgent reasons are not necessity.
-4. Even when a request is a genuine necessity, examine the delta between what they are asking
-   for (requestedTotal) and what they already have available (currentRemaining). Grant the
-   SMALLEST increment that plausibly meets the real need. If a smaller number would suffice,
-   reduce it. Err toward fewer unblocks.
-5. You are a wary teacher. When in doubt, withhold. It is better to deny a borderline request
-   than to feed a habit the student is trying to overcome. A denial is a teaching, not a
-   punishment — speak to it kindly but firmly.
+1. The student is keeping the Eight Precepts of early Buddhism. Their practice is the only
+   priority. You serve their liberation, not their comfort.
+2. Categorically, ALL sensual desire (kāma-taṇhā) is unwholesome (akusala). Entertainment,
+   pornography, music, videos, social media, idle browsing, curiosity, boredom-relief,
+   restlessness, "just to relax," "to unwind," "to check something" — these are craving, and
+   craving is to be abandoned, never fed. There is no acceptable amount of indulgence. Refuse
+   every such request outright, regardless of how it is dressed up.
+3. The ONLY ground on which you may grant access is genuine, concrete, external NECESSITY —
+   a real-world duty that objectively requires this specific site: paid work, formal study,
+   health or safety, an urgent obligation to another person. The necessity must be specific
+   and verifiable in the reason given. Convenience, preference, "it would help," "it would be
+   easier," or any reasoning that ultimately serves the student's own pleasure is NOT necessity.
+4. Do not be persuaded. Emotional appeals, clever justifications, urgency, and desire disguised
+   as need must be seen through and refused. You are not operating by the permissive values of
+   the modern world; you hold the line of the Dhamma.
+5. When you do grant for a true necessity, grant the absolute minimum. Reduce the requested
+   amount to the smallest number that bare necessity demands — prefer 0, then 1. Never grant
+   more than is strictly required.
+6. The default answer is NO. When there is any doubt, deny. A denial is instruction and
+   protection, not punishment. Speak plainly, firmly, and without flattery.
 
 Decision output:
-- "validated": true only if you are granting some extra access (increment >= 1).
-- "increment": the number of EXTRA unblocks you grant for today (an integer >= 0). It must
-  never exceed (requestedTotal - currentRemaining). If you deny, set it to 0.
-- "reason": a short, warm but firm explanation addressed to the student, as a teacher would
-  speak. 1-3 sentences.`;
+- "validated": true ONLY if you are granting access for a genuine necessity (increment >= 1).
+- "increment": the number of EXTRA unblocks you grant (an integer >= 0). It must NEVER exceed
+  the maximum the student requested. If you deny, set it to 0.
+- "reason": a short, plain, firm explanation addressed to the student, as a teacher would
+  speak. 1-3 sentences. Do not validate or sympathize with the desire itself.`;
 
-function buildUserMessage({ domain, currentRemaining, dailyLimit, requestedTotal, reason }) {
-  const delta = Math.max(0, requestedTotal - currentRemaining);
+function buildUserMessage({ domain, currentRemaining, dailyLimit, requestedIncrement, mode, reason }) {
+  const scope =
+    mode === "permanent"
+      ? "The student is asking to PERMANENTLY raise their daily unblock limit for this site."
+      : "The student is asking for extra unblocks for TODAY only.";
   return `A request has come to you.
 
 Site: ${domain}
+Scope: ${scope}
 Unblocks the student currently has available today: ${currentRemaining}
 Their normal daily unblock limit for this site: ${dailyLimit}
-Total unblocks they are asking to have available today: ${requestedTotal}
-Maximum extra (delta) they are requesting: ${delta}
+Extra unblocks they are requesting (the maximum you may grant): ${requestedIncrement}
 
 The student's stated reason:
 """
@@ -56,21 +64,22 @@ Decide. Respond ONLY with a JSON object of the form:
 { "validated": boolean, "reason": string, "increment": integer }`;
 }
 
-function clampIncrement(value, maxDelta) {
+function clampIncrement(value, maxIncrement) {
   const n = Number.parseInt(value, 10);
   if (Number.isNaN(n) || n < 0) return 0;
-  return Math.min(n, maxDelta);
+  return Math.min(n, maxIncrement);
 }
 
 /**
- * Ask the LLM teacher to evaluate an unblock request.
+ * Ask the LLM teacher to evaluate a request for extra unblocks.
  * Returns { validated: boolean, reason: string, increment: number }.
  */
 export async function evaluateUnblockRequest({
   domain,
   currentRemaining,
   dailyLimit,
-  requestedTotal,
+  requestedIncrement,
+  mode,
   reason,
 }) {
   const apiKey = process.env.OPENAI_API_KEY;
@@ -81,11 +90,11 @@ export async function evaluateUnblockRequest({
     );
   }
 
-  const maxDelta = Math.max(0, requestedTotal - currentRemaining);
-  if (maxDelta === 0) {
+  const maxIncrement = Math.max(0, Math.trunc(requestedIncrement));
+  if (maxIncrement === 0) {
     return {
       validated: false,
-      reason: "You are not asking for anything beyond what you already have.",
+      reason: "There is nothing to grant.",
       increment: 0,
     };
   }
@@ -108,7 +117,8 @@ export async function evaluateUnblockRequest({
             domain,
             currentRemaining,
             dailyLimit,
-            requestedTotal,
+            requestedIncrement: maxIncrement,
+            mode,
             reason,
           }),
         },
@@ -132,7 +142,7 @@ export async function evaluateUnblockRequest({
     throw new Error("The teacher's answer could not be understood. Please try again.");
   }
 
-  const increment = clampIncrement(parsed.increment, maxDelta);
+  const increment = clampIncrement(parsed.increment, maxIncrement);
   const validated = Boolean(parsed.validated) && increment >= 1;
 
   return {

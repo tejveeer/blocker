@@ -208,6 +208,21 @@ export class BlockerService {
     return toView(site);
   }
 
+  /**
+   * Permanently change the standing daily unblock limit by `delta` (may be
+   * negative to reduce it). Clamped to [0, 100].
+   */
+  async changeDailyLimit(id, delta) {
+    const site = this.getSiteOrThrow(id);
+    reconcileTime(this.config.sites);
+    const next = Math.min(100, Math.max(0, site.dailyUnblockLimit + Math.trunc(delta)));
+    if (next !== site.dailyUnblockLimit) {
+      site.dailyUnblockLimit = next;
+      await this.sync({ force: true });
+    }
+    return toView(site);
+  }
+
   /** Re-block a site immediately, ending any active temporary unblock early. */
   async reblockSite(id) {
     const site = this.getSiteOrThrow(id);
