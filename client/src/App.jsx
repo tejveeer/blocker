@@ -3,19 +3,27 @@ import { AnimatePresence, motion } from "framer-motion";
 import { Loader2, ShieldBan, X } from "lucide-react";
 
 import { api } from "./api.js";
+import { cn } from "@/lib/utils";
 import PasswordGate from "./components/PasswordGate.jsx";
 import AddSiteForm from "./components/AddSiteForm.jsx";
 import SiteCard from "./components/SiteCard.jsx";
+import UnblockRequest from "./components/UnblockRequest.jsx";
 import ThemeToggle from "@/components/theme-toggle";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { fadeInUp, listContainer, listItem } from "@/lib/motion";
+
+const NAV = [
+  { id: "sites", label: "Sites" },
+  { id: "requests", label: "Unblock requests" },
+];
 
 export default function App() {
   const [hasPassword, setHasPassword] = useState(true);
   const [sites, setSites] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [page, setPage] = useState("sites");
 
   const refresh = useCallback(async () => {
     try {
@@ -104,36 +112,63 @@ export default function App() {
 
       {hasPassword && (
         <>
-          <motion.div {...fadeInUp} transition={{ ...fadeInUp.transition, delay: 0.12 }}>
-            <AddSiteForm onAdded={refresh} onError={handleError} />
-          </motion.div>
-
-          <motion.section
-            className="mt-5 flex flex-col gap-3"
-            variants={listContainer}
-            initial="initial"
-            animate="animate"
+          <motion.nav
+            {...fadeInUp}
+            transition={{ ...fadeInUp.transition, delay: 0.1 }}
+            className="mt-6 inline-flex gap-1 rounded-lg border bg-muted/40 p-1"
           >
-            <AnimatePresence mode="popLayout">
-              {sites.length === 0 ? (
-                <motion.p
-                  key="empty"
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  exit={{ opacity: 0 }}
-                  className="mt-7 text-center text-muted-foreground"
-                >
-                  No sites yet. Add one above to start blocking.
-                </motion.p>
-              ) : (
-                sites.map((site) => (
-                  <motion.div key={site.id} variants={listItem} layout exit="exit">
-                    <SiteCard site={site} onChanged={refresh} onError={handleError} />
-                  </motion.div>
-                ))
-              )}
-            </AnimatePresence>
-          </motion.section>
+            {NAV.map((item) => (
+              <button
+                key={item.id}
+                onClick={() => setPage(item.id)}
+                className={cn(
+                  "rounded-md px-3.5 py-1.5 text-sm font-medium transition-colors",
+                  page === item.id
+                    ? "bg-background text-foreground shadow-sm"
+                    : "text-muted-foreground hover:text-foreground"
+                )}
+              >
+                {item.label}
+              </button>
+            ))}
+          </motion.nav>
+
+          {page === "sites" ? (
+            <>
+              <motion.div {...fadeInUp} transition={{ ...fadeInUp.transition, delay: 0.12 }}>
+                <AddSiteForm onAdded={refresh} onError={handleError} />
+              </motion.div>
+
+              <motion.section
+                className="mt-5 flex flex-col gap-3"
+                variants={listContainer}
+                initial="initial"
+                animate="animate"
+              >
+                <AnimatePresence mode="popLayout">
+                  {sites.length === 0 ? (
+                    <motion.p
+                      key="empty"
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      exit={{ opacity: 0 }}
+                      className="mt-7 text-center text-muted-foreground"
+                    >
+                      No sites yet. Add one above to start blocking.
+                    </motion.p>
+                  ) : (
+                    sites.map((site) => (
+                      <motion.div key={site.id} variants={listItem} layout exit="exit">
+                        <SiteCard site={site} onChanged={refresh} onError={handleError} />
+                      </motion.div>
+                    ))
+                  )}
+                </AnimatePresence>
+              </motion.section>
+            </>
+          ) : (
+            <UnblockRequest sites={sites} onChanged={refresh} onError={handleError} />
+          )}
         </>
       )}
 

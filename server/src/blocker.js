@@ -109,6 +109,12 @@ export class BlockerService {
     return site;
   }
 
+  /** Current UI-shaped view of a single site (with up-to-date counters). */
+  getSiteView(id) {
+    reconcileTime(this.config.sites);
+    return toView(this.getSiteOrThrow(id));
+  }
+
   async addSite({ domain, dailyUnblockLimit, unblockDurationMinutes }) {
     const normalized = normalizeDomain(domain);
     if (!normalized) throw new Error("A valid domain is required.");
@@ -183,6 +189,22 @@ export class BlockerService {
     site.unblocksUsedToday += 1;
     site.unblockExpiresAt = now() + site.unblockDurationMinutes * 60 * 1000;
     await this.sync({ force: true });
+    return toView(site);
+  }
+
+  /**
+   * Grant extra unblocks for *today only* by crediting back used unblocks.
+   * This raises today's remaining count without changing the standing daily
+   * limit, so the grant naturally disappears at the next midnight reset.
+   */
+  async grantExtraUnblocks(id, increment) {
+    const site = this.getSiteOrThrow(id);
+    reconcileTime(this.config.sites);
+    const amount = Math.max(0, Math.trunc(increment));
+    if (amount > 0) {
+      site.unblocksUsedToday = Math.max(0, site.unblocksUsedToday - amount);
+      await this.sync({ force: true });
+    }
     return toView(site);
   }
 

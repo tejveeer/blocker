@@ -21,4 +21,9 @@ export const api = {
   removeSite: (id) => request(`/api/sites/${id}`, { method: "DELETE" }),
   unblock: (id) => request(`/api/sites/${id}/unblock`, { method: "POST" }),
   reblock: (id) => request(`/api/sites/${id}/reblock`, { method: "POST" }),
+  requestUnblocks: (id, payload) =>
+    request(`/api/sites/${id}/unblock-request`, {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
 };

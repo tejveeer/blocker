@@ -1,7 +1,21 @@
+import path from "node:path";
+import process from "node:process";
+import { fileURLToPath } from "node:url";
+
+// Load server/.env (key=value lines) into process.env if present. Uses Node's
+// built-in env-file loader, so no extra dependency is required.
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+try {
+  process.loadEnvFile(path.join(__dirname, "..", ".env"));
+} catch {
+  // No .env file is fine — env vars may be set another way.
+}
+
 import express from "express";
 import cors from "cors";
 import { BlockerService } from "./blocker.js";
 import { verifySudoPassword } from "./sudo.js";
+import { evaluateUnblockRequest } from "./llm.js";
 
 const PORT = process.env.PORT || 4000;
 const service = new BlockerService();
@@ -65,6 +79,39 @@ app.post(
   wrap(async (req, res) => {
     const site = await service.reblockSite(req.params.id);
     res.json(site);
+  })
+);
+
+app.post(
+  "/api/sites/:id/unblock-request",
+  wrap(async (req, res) => {
+    const { requestedTotal, reason } = req.body || {};
+    const site = service.getSiteView(req.params.id);
+
+    const requested = Number.parseInt(requestedTotal, 10);
+    if (Number.isNaN(requested) || requested <= site.unblocksRemaining) {
+      throw new Error(
+        "Ask for more unblocks than you currently have available, or there is nothing to grant."
+      );
+    }
+    if (!reason || !reason.trim()) {
+      throw new Error("Please explain why you need the extra unblocks.");
+    }
+
+    const verdict = await evaluateUnblockRequest({
+      domain: site.domain,
+      currentRemaining: site.unblocksRemaining,
+      dailyLimit: site.dailyUnblockLimit,
+      requestedTotal: requested,
+      reason: reason.trim(),
+    });
+
+    let updated = site;
+    if (verdict.validated && verdict.increment > 0) {
+      updated = await service.grantExtraUnblocks(site.id, verdict.increment);
+    }
+
+    res.json({ ...verdict, site: updated });
   })
 );
 
